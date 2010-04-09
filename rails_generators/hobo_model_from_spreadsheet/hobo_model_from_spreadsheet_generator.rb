@@ -8,8 +8,8 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
 
   def manifest
     record do |m|
-      models_dir = File.join(RAILS_ROOT, 'app/models')
-      fixtures_dir = File.join(RAILS_ROOT, 'test/fixtures')
+      models_dir = 'app/models'
+      fixtures_dir = 'test/fixtures'
 
       m.directory models_dir
       m.directory fixtures_dir
@@ -18,17 +18,30 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
         @data_lengths, records = parse(path)
         @data_lengths.delete(nil) # Remove headerless columns
 
-        base_name = File.basename(path, File.extname(path))
+        base_name = File.basename(path, File.extname(path)).gsub(/ /, '_').downcase
         @new_class_name = base_name.classify()
         m.template 'model.rb', File.join(models_dir, "#{base_name}.rb")
       end
     end
   end
 
+  def is_letter_header(list)
+    letter_header = ['a', 'b', 'c']
+    chunk = list[0..2].collect{ |e|
+      if e.respond_to?('downcase')
+        e.downcase
+      else
+        e
+      end
+    }
+    chunk == letter_header
+  end
+
   def parse(path)
     csvin = FasterCSV.open(path)
 
     common_length = get_common_row_length(csvin)
+    puts("common_length = #{common_length}")
     csvin.seek(0)
 
     headers = nil
@@ -36,10 +49,10 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
 
     records = csvin.collect{ |row|
       if headers.nil?
-        if row.length == common_length
+        if row.compact.length == common_length and not is_letter_header(row)
           headers = row.collect{ |header|
             if header.respond_to?('downcase')
-              header.downcase.gsub(/ /, '_')
+              header.downcase.gsub(/ /, '_').gsub(/[^a-z0-9_]/, '')
             else
               header
             end
@@ -49,7 +62,7 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
       else
         data = headers.zip(row)
         data.each{ |column, value|
-          if value.length > data_lengths[column]
+          if not value.nil? and value.length > data_lengths[column]
             data_lengths[column] = value.length
           end
         }
@@ -69,7 +82,7 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
   end
 
   def get_common_row_length(list_of_lists)
-    column_counts = list_of_lists.collect{ |row| row.length }
+    column_counts = list_of_lists.collect{ |row| row.compact.length }
 
     frequencies = column_counts.inject(Hash.new(0)) {|h,x| h[x]+=1; h}.to_a
     most_frequent = 0
