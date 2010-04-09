@@ -6,23 +6,20 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
   attr_accessor :data_lengths
   attr_accessor :new_class_name
 
-  def manifest
-    record do |m|
-      models_dir = 'app/models'
-      fixtures_dir = 'test/fixtures'
+  def get_common_row_length(list_of_lists)
 
-      m.directory models_dir
-      m.directory fixtures_dir
+    column_counts = list_of_lists.collect{ |row| row.compact.length }
 
-      for path in args
-        @data_lengths, records = parse(path)
-        @data_lengths.delete(nil) # Remove headerless columns
-
-        base_name = File.basename(path, File.extname(path)).gsub(/ /, '_').downcase
-        @new_class_name = base_name.classify()
-        m.template 'model.rb', File.join(models_dir, "#{base_name}.rb")
+    frequencies = column_counts.inject(Hash.new(0)) {|h,x| h[x]+=1; h}.to_a
+    most_frequent = 0
+    most_frequent_occurs = 0
+    frequencies.each{ |columns, occurs|
+      if occurs > most_frequent_occurs
+        most_frequent = columns
+        most_frequent_occurs = occurs
       end
-    end
+    }
+    most_frequent
   end
 
   def is_letter_header(list)
@@ -37,11 +34,30 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
     chunk == letter_header
   end
 
+  def manifest
+    record do |m|
+      models_dir = 'app/models'
+      fixtures_dir = 'test/fixtures'
+
+      m.directory models_dir
+      m.directory fixtures_dir
+
+      for path in args
+        @data_lengths, records = parse(path)
+        @data_lengths.delete(nil) # Remove headerless columns
+
+        base_name = File.basename(path, File.extname(path)).gsub(/ /, '_').downcase
+        @new_class_name = base_name.classify()
+        new_file_name = @new_class_name.underscore()
+        m.template 'model.rb', File.join(models_dir, "#{new_file_name}.rb")
+      end
+    end
+  end
+
   def parse(path)
     csvin = FasterCSV.open(path)
 
     common_length = get_common_row_length(csvin)
-    puts("common_length = #{common_length}")
     csvin.seek(0)
 
     headers = nil
@@ -81,18 +97,4 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
     [data_lengths, records]
   end
 
-  def get_common_row_length(list_of_lists)
-    column_counts = list_of_lists.collect{ |row| row.compact.length }
-
-    frequencies = column_counts.inject(Hash.new(0)) {|h,x| h[x]+=1; h}.to_a
-    most_frequent = 0
-    most_frequent_occurs = 0
-    frequencies.each{ |columns, occurs|
-      if occurs > most_frequent_occurs
-        most_frequent = columns
-        most_frequent_occurs = occurs
-      end
-    }
-    most_frequent
-  end
 end
