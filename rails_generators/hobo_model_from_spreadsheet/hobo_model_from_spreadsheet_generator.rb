@@ -7,7 +7,6 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
   attr_accessor :new_class_name
 
   def get_common_row_length(list_of_lists)
-
     column_counts = list_of_lists.collect{ |row| row.compact.length }
 
     frequencies = column_counts.inject(Hash.new(0)) {|h,x| h[x]+=1; h}.to_a
@@ -63,7 +62,7 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
     headers = nil
     data_lengths = Hash.new(0)
 
-    records = csvin.collect{ |row|
+    records = csvin.to_enum(:each_with_index).collect{ |row, row_number|
       if headers.nil?
         if row.compact.length == common_length and not is_letter_header(row)
           headers = row.collect{ |header|
@@ -88,6 +87,8 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
             data << ['annotations', extra.join('; ')]
           end
         end
+        data << ['imported_from_file', path]
+        data << ['line_number', row_number]
         mapped_data = Hash[*data.flatten]
         mapped_data.delete(nil) # Remove headerless columns
         mapped_data

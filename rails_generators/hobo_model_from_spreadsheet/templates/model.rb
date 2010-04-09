@@ -3,9 +3,11 @@ class <%= new_class_name %> < ActiveRecord::Base
   hobo_model # Don't put anything above this
 
   fields do
-  <% for column, length in data_lengths -%>
+<% for column, length in data_lengths -%>
     <%= column %> :string, :length => <%= length %>
-  <% end -%>
+<% end -%>
+    imported_from_file :text
+    line_number :integer
     timestamps
   end
 
