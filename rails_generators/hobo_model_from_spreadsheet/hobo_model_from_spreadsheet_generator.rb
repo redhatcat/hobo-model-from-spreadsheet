@@ -49,6 +49,16 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
         @new_class_name = base_name.classify()
         new_file_name = @new_class_name.underscore()
         m.template 'model.rb', File.join(models_dir, "#{new_file_name}.rb")
+
+        fixture_file = File.join(fixtures_dir, "#{new_file_name}.csv")
+        logger.fixture fixture_file
+        headers = data_lengths.keys() + ['imported_from_file', 'line_number']
+        FasterCSV.open(fixture_file, 'w'){ |csv|
+          csv << headers
+          for record in records.compact
+            csv << record.values_at(*headers)
+          end
+        }
       end
     end
   end
@@ -88,7 +98,7 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
           end
         end
         data << ['imported_from_file', path]
-        data << ['line_number', row_number]
+        data << ['line_number', row_number + 1]
         mapped_data = Hash[*data.flatten]
         mapped_data.delete(nil) # Remove headerless columns
         mapped_data
