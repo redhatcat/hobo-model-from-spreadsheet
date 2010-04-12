@@ -6,6 +6,8 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
   attr_accessor :data_lengths
   attr_accessor :new_class_name
 
+  default_options :header_row => false
+
   def get_common_row_length(list_of_lists)
     column_counts = list_of_lists.collect{ |row| row.compact.length }
 
@@ -13,7 +15,7 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
     most_frequent = 0
     most_frequent_occurs = 0
     frequencies.each{ |columns, occurs|
-      if occurs > most_frequent_occurs
+      if columns > 1 and occurs > most_frequent_occurs
         most_frequent = columns
         most_frequent_occurs = occurs
       end
@@ -21,16 +23,15 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
     most_frequent
   end
 
-  def is_letter_header(list)
-    letter_header = ['a', 'b', 'c']
-    chunk = list[0..2].collect{ |e|
-      if e.respond_to?('downcase')
-        e.downcase
-      else
+  def is_letter_header(list, threshold=4)
+    suspect_columns = list.collect{ |e|
+      if e.respond_to?('length') and e.length == 1
         e
+      else
+        nil
       end
     }
-    chunk == letter_header
+    suspect_columns.compact.length > threshold
   end
 
   def manifest
@@ -41,47 +42,62 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
       m.directory models_dir
       m.directory fixtures_dir
 
-      for path in args
-        @data_lengths, records = parse(path)
-        @data_lengths.delete(nil) # Remove headerless columns
-
-        base_name = File.basename(path, File.extname(path)).gsub(/ /, '_').downcase
-        @new_class_name = base_name.classify()
-        new_file_name = @new_class_name.underscore()
-        m.template 'model.rb', File.join(models_dir, "#{new_file_name}.rb")
-
-        fixture_file = File.join(fixtures_dir, "#{new_file_name}.csv")
-        logger.fixture fixture_file
-        headers = data_lengths.keys() + ['imported_from_file', 'line_number']
-        FasterCSV.open(fixture_file, 'w'){ |csv|
-          csv << headers
-          for record in records.compact
-            csv << record.values_at(*headers)
-          end
-        }
+      if options[:header_row]
+        header_row = Integer(args.shift)
+      else
+        header_row = nil
       end
+
+      path = args.shift
+
+      @data_lengths, records = parse(path, :header_row => header_row)
+      @data_lengths.delete(nil) # Remove headerless columns
+
+      base_name = File.basename(path, File.extname(path)).gsub(/ /, '_').downcase
+      @new_class_name = base_name.classify()
+      new_file_name = @new_class_name.underscore()
+      m.template 'model.rb', File.join(models_dir, "#{new_file_name}.rb")
+
+      fixture_file = File.join(fixtures_dir, "#{new_file_name.pluralize}.csv")
+      logger.fixture fixture_file
+      headers = data_lengths.keys() + ['imported_from_file', 'line_number']
+      FasterCSV.open(fixture_file, 'w'){ |csv|
+        csv << headers
+        for record in records.compact
+          csv << record.values_at(*headers)
+        end
+      }
     end
   end
 
-  def parse(path)
+  def parse(path, options={})
     csvin = FasterCSV.open(path)
 
     common_length = get_common_row_length(csvin)
     csvin.seek(0)
 
+    header_row = options[:header_row]
     headers = nil
     data_lengths = Hash.new(0)
 
+    def collect_headers(row)
+      row.collect{ |header|
+        if header.respond_to?('downcase')
+          header.downcase.gsub(/ /, '_').gsub(/[^a-z0-9_]/, '')
+        else
+          header
+        end
+      }
+    end
+
     records = csvin.to_enum(:each_with_index).collect{ |row, row_number|
       if headers.nil?
-        if row.compact.length == common_length and not is_letter_header(row)
-          headers = row.collect{ |header|
-            if header.respond_to?('downcase')
-              header.downcase.gsub(/ /, '_').gsub(/[^a-z0-9_]/, '')
-            else
-              header
-            end
-          }
+        if header_row.nil? and
+          row.compact.length >= common_length and
+          not is_letter_header(row)
+          headers = collect_headers(row)
+        elsif row_number + 1 == header_row
+          headers = collect_headers(row)
         end
         nil
       else
@@ -108,4 +124,12 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
     [data_lengths, records]
   end
 
+  protected
+
+    def add_options!(opt)
+      opt.separator ''
+      opt.separator 'Options:'
+      opt.on("--header-row",
+             "Force row to be recognized as the header row") { |v| options[:header_row] = v }
+    end
 end
