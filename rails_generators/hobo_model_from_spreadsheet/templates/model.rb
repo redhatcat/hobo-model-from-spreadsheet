@@ -6,6 +6,7 @@ class <%= new_class_name %> < ActiveRecord::Base
 <% for column, length in data_lengths -%>
     <%= column %> :string, :length => <%= length %>
 <% end -%>
+    annotations :text
     imported_from_file :text
     line_number :integer
     timestamps

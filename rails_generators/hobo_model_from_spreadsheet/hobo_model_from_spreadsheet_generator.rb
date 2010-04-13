@@ -60,7 +60,7 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
 
       fixture_file = File.join(fixtures_dir, "#{new_file_name.pluralize}.csv")
       logger.fixture fixture_file
-      headers = data_lengths.keys() + ['imported_from_file', 'line_number']
+      headers = data_lengths.keys() + ['annotations', 'imported_from_file', 'line_number']
       FasterCSV.open(fixture_file, 'w'){ |csv|
         csv << headers
         for record in records.compact
