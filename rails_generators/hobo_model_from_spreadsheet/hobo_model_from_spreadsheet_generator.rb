@@ -87,7 +87,7 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
 
   def parse(path, options={})
     if !is_file_utf8(path)
-      raise 'CSV must if encoded as UTF-8 or ASCII'
+      raise 'CSV must be encoded as UTF-8 or ASCII'
     end
     csvin = FasterCSV.open(path)
 
