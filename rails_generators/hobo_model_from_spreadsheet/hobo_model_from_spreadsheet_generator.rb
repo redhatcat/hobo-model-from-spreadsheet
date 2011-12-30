@@ -1,5 +1,6 @@
 require 'rubygems'
 require 'fastercsv'
+require 'iconv'
 
 class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
 
@@ -21,6 +22,20 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
       end
     }
     most_frequent
+  end
+
+  # Checks if path contains utf8 or compatible text, i.e. ASCII.
+  def is_file_utf8(path)
+    File.open(path) do |f|
+      begin
+        f.each do |line|
+          Iconv.conv('UTF-8', 'UTF-8', line)
+        end
+      rescue Iconv::IllegalSequence
+        return false
+      end
+    end
+    true
   end
 
   def is_letter_header(list, threshold=4)
@@ -71,6 +86,9 @@ class HoboModelFromSpreadsheetGenerator < Rails::Generator::Base
   end
 
   def parse(path, options={})
+    if !is_file_utf8(path)
+      raise 'CSV must if encoded as UTF-8 or ASCII'
+    end
     csvin = FasterCSV.open(path)
 
     common_length = get_common_row_length(csvin)
